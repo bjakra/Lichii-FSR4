@@ -64,7 +64,8 @@ public:
     ~Fsr4Upscaler();
 
     /// Records one evaluation into the output image (RGBA16F at the upscale size, GENERAL
-    /// layout). False when FSR 4 can't run (the caller then uses FSR 3.1 from now on).
+    /// layout). False when FSR 4 can't run (the caller then uses FSR 3.1 from now on). The input
+    /// colour image needs TRANSFER_SRC usage for the output check.
     bool Upscale(const Inputs& inputs);
 
     [[nodiscard]] bool Failed() const noexcept {
@@ -82,6 +83,9 @@ private:
     void DestroyContext();
     void CreateOutput(VkExtent2D upscale_size);
     void CreateExposure();
+    /// Reads back the last output check. True when FSR 4 has drawn black (or NaN) over a varied
+    /// picture long enough that it should give way to FSR 3.1.
+    bool CheckOutput();
 
     const Device& device;
     Scheduler& scheduler;
@@ -96,6 +100,16 @@ private:
     vk::ImageView output_view;
     vk::Image exposure_image; ///< 1x1 R32F holding 1 (the input is tonemapped, unit exposure)
     std::atomic<bool> failed{};
+
+    // Output check: a grid of input and output pixels read back now and then until FSR 4 has
+    // drawn a picture.
+    vk::Buffer check_buffer;
+    u64 check_tick{};
+    u32 check_frame{};
+    u32 good_checks{};
+    u32 black_checks{};
+    bool check_pending{};
+    bool check_done{};
 };
 
 } // namespace Vulkan

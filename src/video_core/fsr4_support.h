@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string_view>
 
 #include "common/common_types.h"
@@ -141,6 +143,38 @@ constexpr Fsr4PortSupport CheckFsr4Port(const Fsr4PortDevice& device) {
         return {Fsr4PortModel::Fp8, "FP8 cooperative matrices (RDNA 4)"};
     }
     return {Fsr4PortModel::Int8, "no FP8 cooperative matrices, so the INT8 network"};
+}
+
+enum class Fsr4OutputCheck {
+    Unjudged, ///< The input barely varies (a fade, a loading screen): nothing to judge by.
+    Picture,
+    Black, ///< Every output pixel is black, NaN or infinite over a varied input.
+};
+
+/// Judges a few RGBA16F pixels of FSR 4's input and of its output at the same places. A community
+/// port or a driver bug can make FSR 4 draw black over a real picture without reporting an error.
+/// Adapted from CheezerWheezer's CheezyEmu (3260bc5470).
+constexpr Fsr4OutputCheck CheckFsr4Output(std::span<const std::array<u16, 4>> input,
+                                          std::span<const std::array<u16, 4>> output) {
+    size_t distinct = 0;
+    for (size_t i = 1; i < input.size(); ++i) {
+        distinct += input[i] != input[0] ? 1 : 0;
+    }
+    if (distinct < input.size() / 4) {
+        return Fsr4OutputCheck::Unjudged;
+    }
+    for (const std::array<u16, 4>& texel : output) {
+        bool not_finite = false;
+        bool black = true;
+        for (size_t channel = 0; channel < 3; ++channel) {
+            not_finite |= (texel[channel] & 0x7c00) == 0x7c00;
+            black &= (texel[channel] & 0x7fff) == 0;
+        }
+        if (!not_finite && !black) {
+            return Fsr4OutputCheck::Picture;
+        }
+    }
+    return Fsr4OutputCheck::Black;
 }
 
 } // namespace VideoCommon

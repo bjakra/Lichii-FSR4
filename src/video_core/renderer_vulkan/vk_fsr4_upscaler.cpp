@@ -6,8 +6,11 @@
 // and records into our command buffer. Picking the FSR 4 provider by version follows
 // CheezerWheezer's FSR 4 integration for CheezyEmu.
 
+#include <array>
 #include <cstddef>
+#include <cstring>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -44,6 +47,41 @@ constexpr VkImageSubresourceRange COLOR_RANGE{
     .baseArrayLayer = 0,
     .layerCount = 1,
 };
+
+// The output check (adapted from CheezyEmu): an 8x8 grid of RGBA16F input and output pixels.
+using CheckTexel = std::array<u16, 4>;
+constexpr u32 CHECK_GRID = 8;
+constexpr u32 CHECK_PIXELS = CHECK_GRID * CHECK_GRID;
+constexpr VkDeviceSize CHECK_OUTPUT_OFFSET = CHECK_PIXELS * sizeof(CheckTexel);
+constexpr VkDeviceSize CHECK_SIZE = 2 * CHECK_OUTPUT_OFFSET;
+constexpr u32 CHECK_INTERVAL = 30;   ///< Frames between checks.
+constexpr u32 CHECK_BLACK_LIMIT = 8; ///< Black checks in a row (about 4 to 8 s) to give up.
+constexpr u32 CHECK_GOOD_LIMIT = 4;  ///< Good checks to stop checking.
+
+std::array<VkBufferImageCopy, CHECK_PIXELS> CheckRegions(const VkImageSubresourceRange& range,
+                                                         VkExtent2D size, VkDeviceSize base) {
+    std::array<VkBufferImageCopy, CHECK_PIXELS> regions{};
+    for (u32 y = 0; y < CHECK_GRID; ++y) {
+        for (u32 x = 0; x < CHECK_GRID; ++x) {
+            const u32 i = y * CHECK_GRID + x;
+            regions[i] = VkBufferImageCopy{
+                .bufferOffset = base + i * sizeof(CheckTexel),
+                .bufferRowLength = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource{
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .mipLevel = range.baseMipLevel,
+                    .baseArrayLayer = range.baseArrayLayer,
+                    .layerCount = 1,
+                },
+                .imageOffset{static_cast<s32>((2 * x + 1) * size.width / (2 * CHECK_GRID)),
+                             static_cast<s32>((2 * y + 1) * size.height / (2 * CHECK_GRID)), 0},
+                .imageExtent{1, 1, 1},
+            };
+        }
+    }
+    return regions;
+}
 
 FfxApiResource Resource(VkImage image, VkFormat format, VkExtent2D size, u32 usage, u32 state) {
     FfxApiResource resource{};
@@ -374,8 +412,47 @@ void Fsr4Upscaler::CreateOutput(VkExtent2D upscale_size) {
     });
 }
 
+bool Fsr4Upscaler::CheckOutput() {
+    if (!check_pending || !scheduler.IsFree(check_tick)) {
+        return false;
+    }
+    check_pending = false;
+    check_buffer.Invalidate();
+    const std::span<const u8> data = check_buffer.Mapped();
+    std::array<CheckTexel, CHECK_PIXELS> input;
+    std::array<CheckTexel, CHECK_PIXELS> output;
+    std::memcpy(input.data(), data.data(), sizeof(input));
+    std::memcpy(output.data(), data.data() + CHECK_OUTPUT_OFFSET, sizeof(output));
+    switch (VideoCommon::CheckFsr4Output(input, output)) {
+    case VideoCommon::Fsr4OutputCheck::Unjudged:
+        return false;
+    case VideoCommon::Fsr4OutputCheck::Picture:
+        black_checks = 0;
+        if (++good_checks >= CHECK_GOOD_LIMIT) {
+            check_done = true;
+            check_buffer = vk::Buffer{};
+            LOG_INFO(Render_Vulkan, "FSR 4 ({}): output check passed", provider_name);
+        }
+        return false;
+    case VideoCommon::Fsr4OutputCheck::Black:
+        ++black_checks;
+        LOG_WARNING(Render_Vulkan, "FSR 4 ({}): black output over a varied picture ({} of {})",
+                    provider_name, black_checks, CHECK_BLACK_LIMIT);
+        return black_checks >= CHECK_BLACK_LIMIT;
+    }
+    return false;
+}
+
 bool Fsr4Upscaler::Upscale(const Inputs& in) {
     if (failed.load()) {
+        return false;
+    }
+    if (!check_done && CheckOutput()) {
+        LOG_ERROR(Render_Vulkan, "FSR 4 ({}) draws a black picture on {} ({}); using FSR 3.1",
+                  provider_name, device.GetModelName(), device.GetDriverName());
+        check_done = true;
+        check_buffer = vk::Buffer{};
+        failed = true;
         return false;
     }
     const bool new_context = context == nullptr || in.render_size.width != render_extent.width ||
@@ -423,9 +500,29 @@ bool Fsr4Upscaler::Upscale(const Inputs& in) {
     dispatch.viewSpaceToMetersFactor = 1.0f;
     dispatch.flags = 0;
 
+    VkBuffer check = VK_NULL_HANDLE;
+    if (!check_done && !check_pending && ++check_frame % CHECK_INTERVAL == 0) {
+        if (!check_buffer) {
+            check_buffer = memory_allocator.CreateBuffer(
+                VkBufferCreateInfo{
+                    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                    .pNext = nullptr,
+                    .flags = 0,
+                    .size = CHECK_SIZE,
+                    .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                    .queueFamilyIndexCount = 0,
+                    .pQueueFamilyIndices = nullptr,
+                },
+                MemoryUsage::Download);
+        }
+        check = *check_buffer;
+        check_pending = true;
+        check_tick = scheduler.CurrentTick();
+    }
+
     scheduler.RequestOutsideRenderPassOperationContext();
-    scheduler.Record([this, in, dispatch,
-                      output = *output_image](vk::CommandBuffer cmdbuf) {
+    scheduler.Record([this, in, dispatch, check, output = *output_image](vk::CommandBuffer cmdbuf) {
         constexpr VkAccessFlags WRITES =
             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
             VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -474,6 +571,31 @@ bool Fsr4Upscaler::Upscale(const Inputs& in) {
         }
         cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, {}, {}, back);
+        if (check != VK_NULL_HANDLE) {
+            cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                   VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                                   VkMemoryBarrier{
+                                       .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+                                       .pNext = nullptr,
+                                       .srcAccessMask = WRITES,
+                                       .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+                                   });
+            cmdbuf.CopyImageToBuffer(in.color.image, VK_IMAGE_LAYOUT_GENERAL, check,
+                                     CheckRegions(in.color.range, in.render_size, 0));
+            cmdbuf.CopyImageToBuffer(
+                output, VK_IMAGE_LAYOUT_GENERAL, check,
+                CheckRegions(COLOR_RANGE, in.upscale_size, CHECK_OUTPUT_OFFSET));
+            // Later passes that write the colour or output wait for the copies too.
+            cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                   VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                   0,
+                                   VkMemoryBarrier{
+                                       .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+                                       .pNext = nullptr,
+                                       .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                                       .dstAccessMask = VK_ACCESS_HOST_READ_BIT,
+                                   });
+        }
     });
     return true;
 }

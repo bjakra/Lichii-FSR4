@@ -665,8 +665,10 @@ struct OcarinaFrameSlot {
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                                   FrameGenCopyUsage())},
           motion_view{CreateOcarinaView(device, *motion, MOTION_FORMAT)},
+          // TRANSFER_SRC: FSR 4's output check reads a few of its pixels.
           color{CreateOcarinaImage(allocator, extent, LIVE_COLOR_FORMAT,
-                                   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)},
+                                   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT)},
           color_view{CreateOcarinaView(device, *color, LIVE_COLOR_FORMAT)} {}
 
     VkExtent2D extent;

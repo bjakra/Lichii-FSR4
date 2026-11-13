@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <array>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include "video_core/fsr4_support.h"
@@ -90,4 +92,45 @@ TEST_CASE("The fsr4-vk FSR 4 port runs on RDNA 2 and newer Radeons on RADV with 
         CHECK_FALSE(support.model);
         CHECK_FALSE(support.reason.empty());
     }
+}
+
+TEST_CASE("FSR 4's output check tells a black or NaN output over a real picture",
+          "[video_core][fsr4]") {
+    using VideoCommon::CheckFsr4Output;
+    using VideoCommon::Fsr4OutputCheck;
+    using Texel = std::array<u16, 4>;
+    constexpr u16 one = 0x3c00;
+    constexpr u16 half = 0x3800;
+    constexpr u16 nan = 0x7e00;
+    constexpr u16 negative_zero = 0x8000;
+    std::array<Texel, 64> varied{};
+    for (size_t i = 0; i < varied.size(); ++i) {
+        varied[i] = {static_cast<u16>(0x2000 + i * 0x80), half, half, one};
+    }
+    std::array<Texel, 64> black{};
+    black.fill({0, negative_zero, 0, one}); // alpha doesn't count
+    std::array<Texel, 64> not_finite{};
+    not_finite.fill({nan, nan, nan, one});
+
+    CHECK(CheckFsr4Output(varied, varied) == Fsr4OutputCheck::Picture);
+    CHECK(CheckFsr4Output(varied, black) == Fsr4OutputCheck::Black);
+    CHECK(CheckFsr4Output(varied, not_finite) == Fsr4OutputCheck::Black);
+
+    // One real pixel is enough.
+    std::array<Texel, 64> mostly_black = black;
+    mostly_black[17] = {half, 0, 0, one};
+    CHECK(CheckFsr4Output(varied, mostly_black) == Fsr4OutputCheck::Picture);
+
+    // A flat input (a fade, a loading screen) can't be judged.
+    std::array<Texel, 64> flat{};
+    flat.fill({half, half, half, one});
+    CHECK(CheckFsr4Output(flat, black) == Fsr4OutputCheck::Unjudged);
+    std::array<Texel, 64> few_distinct = flat;
+    for (size_t i = 1; i < 15; ++i) {
+        few_distinct[i] = varied[i];
+    }
+    CHECK(CheckFsr4Output(few_distinct, black) == Fsr4OutputCheck::Unjudged);
+    few_distinct[15] = varied[15];
+    few_distinct[16] = varied[16];
+    CHECK(CheckFsr4Output(few_distinct, black) == Fsr4OutputCheck::Black);
 }
