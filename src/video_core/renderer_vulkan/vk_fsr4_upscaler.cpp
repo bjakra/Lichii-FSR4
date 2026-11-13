@@ -7,6 +7,7 @@
 // CheezerWheezer's FSR 4 integration for CheezyEmu.
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <optional>
@@ -143,6 +144,12 @@ VkDeviceContext DeviceContext(const Device& device) {
     };
 }
 
+s64 SteadyNowNs() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
 struct Provider {
     u64 id{};
     std::string name;
@@ -275,7 +282,7 @@ void Fsr4Upscaler::DestroyContext() {
     context = nullptr;
 }
 
-bool Fsr4Upscaler::CreateContext(VkExtent2D render_size, VkExtent2D upscale_size) {
+u32 Fsr4Upscaler::CreateContext(VkExtent2D render_size, VkExtent2D upscale_size) {
     DestroyContext();
     ffxCreateBackendVKDesc backend{};
 #if defined(__linux__)
@@ -319,7 +326,7 @@ bool Fsr4Upscaler::CreateContext(VkExtent2D render_size, VkExtent2D upscale_size
         LOG_ERROR(Render_Vulkan, "FSR 4: ffxCreateContext {}x{} -> {}x{} failed ({}); using FSR 3.1",
                   render_size.width, render_size.height, upscale_size.width, upscale_size.height,
                   result);
-        return false;
+        return result;
     }
     context = ctx;
     render_extent = render_size;
@@ -331,7 +338,7 @@ bool Fsr4Upscaler::CreateContext(VkExtent2D render_size, VkExtent2D upscale_size
     LOG_INFO(Render_Vulkan, "FSR 4: AMD FSR {} context {}x{} -> {}x{}", provider_name,
              render_size.width, render_size.height, upscale_size.width, upscale_size.height);
 #endif
-    return true;
+    return FFX_API_RETURN_OK;
 }
 
 void Fsr4Upscaler::CreateExposure() {
@@ -443,9 +450,22 @@ bool Fsr4Upscaler::CheckOutput() {
     return false;
 }
 
+bool Fsr4Upscaler::Failed() const noexcept {
+    if (!failed.load()) {
+        return false;
+    }
+    const s64 retry = retry_at_ns.load();
+    return retry == 0 || SteadyNowNs() < retry;
+}
+
 bool Fsr4Upscaler::Upscale(const Inputs& in) {
     if (failed.load()) {
-        return false;
+        if (Failed()) {
+            return false;
+        }
+        // Time for another try at a context that couldn't be created.
+        failed = false;
+        retry_at_ns = 0;
     }
     if (!check_done && CheckOutput()) {
         LOG_ERROR(Render_Vulkan, "FSR 4 ({}) draws a black picture on {} ({}); using FSR 3.1",
@@ -460,10 +480,22 @@ bool Fsr4Upscaler::Upscale(const Inputs& in) {
                              in.upscale_size.width != upscale_extent.width ||
                              in.upscale_size.height != upscale_extent.height;
     if (new_context) {
-        if (!CreateContext(in.render_size, in.upscale_size)) {
+        const u32 result = CreateContext(in.render_size, in.upscale_size);
+        if (result != FFX_API_RETURN_OK) {
+            // Out of video memory may pass (a scene loading is when it's shortest): FSR 3.1 draws
+            // meanwhile and FSR 4 is tried again a few times. Other errors won't pass.
+            const bool may_pass = result == FFX_API_RETURN_ERROR_RUNTIME_ERROR ||
+                                  result == FFX_API_RETURN_ERROR_MEMORY;
+            const std::optional<u32> delay =
+                may_pass ? VideoCommon::Fsr4RetryDelay(++create_failures) : std::nullopt;
+            if (delay) {
+                LOG_WARNING(Render_Vulkan, "FSR 4: trying to start it again in {} s", *delay);
+                retry_at_ns = SteadyNowNs() + s64{*delay} * 1'000'000'000;
+            }
             failed = true;
             return false;
         }
+        create_failures = 0;
         CreateOutput(in.upscale_size);
     }
 

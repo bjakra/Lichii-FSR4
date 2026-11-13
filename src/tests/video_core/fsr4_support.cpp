@@ -134,3 +134,15 @@ TEST_CASE("FSR 4's output check tells a black or NaN output over a real picture"
     few_distinct[16] = varied[16];
     CHECK(CheckFsr4Output(few_distinct, black) == Fsr4OutputCheck::Black);
 }
+
+TEST_CASE("FSR 4 that couldn't start is tried again a few times, then given up",
+          "[video_core][fsr4]") {
+    using VideoCommon::Fsr4RetryDelay;
+    CHECK_FALSE(Fsr4RetryDelay(0));
+    CHECK(Fsr4RetryDelay(1) == 10u);
+    CHECK(Fsr4RetryDelay(2) == 30u);
+    CHECK(Fsr4RetryDelay(3) == 90u);
+    CHECK(Fsr4RetryDelay(4) == 240u);
+    CHECK_FALSE(Fsr4RetryDelay(5));
+    CHECK_FALSE(Fsr4RetryDelay(100));
+}

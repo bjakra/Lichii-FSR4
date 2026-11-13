@@ -64,13 +64,13 @@ public:
     ~Fsr4Upscaler();
 
     /// Records one evaluation into the output image (RGBA16F at the upscale size, GENERAL
-    /// layout). False when FSR 4 can't run (the caller then uses FSR 3.1 from now on). The input
-    /// colour image needs TRANSFER_SRC usage for the output check.
+    /// layout). False when FSR 4 can't run (the caller then uses FSR 3.1 while Failed()). The
+    /// input colour image needs TRANSFER_SRC usage for the output check.
     bool Upscale(const Inputs& inputs);
 
-    [[nodiscard]] bool Failed() const noexcept {
-        return failed.load();
-    }
+    /// True while FSR 4 is out: for good, or until its next try (a context that couldn't be
+    /// created for a reason that may pass is tried again a few times, later).
+    [[nodiscard]] bool Failed() const noexcept;
     [[nodiscard]] VkImage OutputImage() const noexcept {
         return *output_image;
     }
@@ -79,7 +79,8 @@ public:
     }
 
 private:
-    bool CreateContext(VkExtent2D render_size, VkExtent2D upscale_size);
+    /// Returns the FFX return code (0 when the context was made).
+    u32 CreateContext(VkExtent2D render_size, VkExtent2D upscale_size);
     void DestroyContext();
     void CreateOutput(VkExtent2D upscale_size);
     void CreateExposure();
@@ -100,6 +101,9 @@ private:
     vk::ImageView output_view;
     vk::Image exposure_image; ///< 1x1 R32F holding 1 (the input is tonemapped, unit exposure)
     std::atomic<bool> failed{};
+    /// When a context that couldn't be created is tried again (steady clock, ns); 0: never.
+    std::atomic<s64> retry_at_ns{};
+    u32 create_failures{};
 
     // Output check: a grid of input and output pixels read back now and then until FSR 4 has
     // drawn a picture.
