@@ -97,7 +97,12 @@ the game keeps its own pass whenever DLSS is off, unavailable or fails to start.
   `shaderFloat16` device feature are enabled for it only while the setting is on. FSR 3.1
   stays created and takes over if the files are missing or don't check out, AMD's runtime offers
   no FSR 4 for the GPU, the context can't be created or a dispatch fails. The log says which, and
-  shows `Ocarina FSR 4 evaluated` while it runs.
+  shows `Ocarina FSR 4 evaluated` while it runs. A context that fails with a runtime or memory
+  error (out of video memory while a scene loads, typically) is tried again after 10, 30, 90 and
+  240 s while FSR 3.1 draws. Until FSR 4 has drawn a picture, an 8x8 grid of its input and output
+  pixels is read back every 30 frames; eight black or NaN outputs in a row over a varied input
+  hand over to FSR 3.1 for the session (both adapted from CheezyEmu, `f2f236e148` and
+  `3260bc5470`).
 - FSR 4 on Linux (RADV, off by default): "Use FSR 4 (fsr4-vk community Vulkan port) in place of
   FSR 3.1" feeds the same inputs to [fsr4-vk](https://github.com/Astyyyyy/fsr4-vk) (GPL-3.0), a
   community Vulkan port of FSR 4.1.1 built from AMD's weights and shaders. It is not AMD's
@@ -106,17 +111,26 @@ the game keeps its own pass whenever DLSS is off, unavailable or fails to start.
   SDK 2.3.0 it extracts them from (listed under MIT in the SDK's `license.md`). Both x86-64 Linux
   packages carry `usr/lib/amd_fidelityfx_upscaler_vk.so` and, in `usr/share/licenses/fsr4-vk`,
   fsr4-vk's licences and AMD's SDK licence. The aarch64 packages don't: fsr4-vk's shader
-  conversion fails its own asset check on arm64 hosts. A build without it loads the library from the user
-  folder's `fidelityfx` folder. The setting is shown for RDNA 2 and newer Radeons on RADV
-  (`VideoCommon::IsFsr4PortGpu`). At boot `VideoCommon::CheckFsr4Port` checks what fsr4-vk's
-  shaders use on the created device (descriptor buffers, synchronization2, 32-lane compute
-  subgroups, 8/16-bit arithmetic with integer dot products, linear compute derivatives) and picks
+  conversion fails its own asset check on arm64 hosts. Lichii looks for the library in `../lib`
+  beside its executable (`build/lib` for a local build), then in the user folder's `fidelityfx`
+  folder. The setting is shown for RDNA 2 and newer Radeons on RADV
+  (`VideoCommon::IsFsr4PortGpu`). When Ocarina's upscaler is created (the first frame it
+  upscales), `VideoCommon::CheckFsr4Port` checks what fsr4-vk's shaders use on the created device
+  (descriptor buffers with buffer device addresses, which are core since Vulkan 1.2,
+  synchronization2, 32-lane compute subgroups, 8/16-bit arithmetic with integer dot products,
+  linear compute derivatives) and picks
   the network: FP8 with FP16/FP8 cooperative matrices, `shaderFloat8` and the matrix conversions
   of `VK_NV_cooperative_matrix2` (RADV exposes it only with its `radv_cooperative_matrix2_nv`
-  option), INT8 otherwise. Lichii asks fsr4-vk for that model by version. The extra device
-  features are enabled only while the setting is on with RADV. Anything missing, a missing
-  library or a failed context or dispatch leaves FSR 3.1 running, and the log names the active
-  upscaler and why. Ported from #915's loader; untested on AMD hardware so far.
+  option), INT8 otherwise. Lichii asks fsr4-vk for that model by version ("4.1.1 Vulkan INT8" or
+  "4.1.1 Vulkan FP8") and passes the Vulkan device in the legacy backend descriptor (type 3), the
+  only one fsr4-vk recognises. The extra device features are enabled only while the setting is on
+  with RADV. Anything missing, a missing library, a failed context or dispatch, or black output
+  leaves FSR 3.1 running (with the retries and output check above), and the log names the active
+  upscaler and why. fsr4-vk writes its own reasons, such as why it rejected a context, to
+  `fsr4.log` in the working directory (`FSR4_VK_LOG_PATH` moves it). Ported from #915's loader,
+  with the fixes of zortos293/Lichii#1540 and #1595. Not yet tested in a game: a standalone
+  program repeating Lichii's calls created the INT8 context and upscaled a synthetic frame on an
+  RX 6800 XT with Mesa RADV.
 - #644 (`82494c4820`, `74a2d20c90`, `4352c06bbf`) supplies the effects capture, used by FSR only
   (DLSS gets no bias mask and runs as before). FSR uses its R16F current/history bias as both
   reactive and transparency/composition masks; missing capture uses zero masks, not stale
