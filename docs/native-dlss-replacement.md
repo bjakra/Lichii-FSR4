@@ -98,8 +98,9 @@ the game keeps its own pass whenever DLSS is off, unavailable or fails to start.
   stays created and takes over if the files are missing or don't check out, AMD's runtime offers
   no FSR 4 for the GPU, the context can't be created or a dispatch fails. The log says which, and
   shows `Ocarina FSR 4 evaluated` while it runs. A context that fails with a runtime or memory
-  error (out of video memory while a scene loads, typically) is tried again after 10, 30, 90 and
-  240 s while FSR 3.1 draws. Until FSR 4 has drawn a picture, an 8x8 grid of its input and output
+  error (out of video memory while a scene loads, for one) is tried again after 10 and 60 s while
+  FSR 3.1 draws; fsr4-vk returns a runtime error for every rejection, so permanent causes are
+  retried too. Until FSR 4 has drawn a picture, an 8x8 grid of its input and output
   pixels is read back every 30 frames; eight black or NaN outputs in a row over a varied input
   hand over to FSR 3.1 for the session (both adapted from CheezyEmu, `f2f236e148` and
   `3260bc5470`).

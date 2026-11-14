@@ -177,11 +177,12 @@ constexpr Fsr4OutputCheck CheckFsr4Output(std::span<const std::array<u16, 4>> in
     return Fsr4OutputCheck::Black;
 }
 
-/// Seconds before FSR 4 tries again to create a context after this many failures in a row that
-/// may pass later (out of video memory, typically), or none to give up for the session. Adapted
-/// from CheezyEmu (f2f236e148).
+/// Seconds before FSR 4 tries again to create a context after this many failures in a row with an
+/// error that may pass later (out of video memory, typically), or none to give up for the session.
+/// The same errors also stand for causes that won't pass, so the tries cover about a minute (a
+/// scene loading) rather than CheezyEmu's (f2f236e148) four over six minutes.
 constexpr std::optional<u32> Fsr4RetryDelay(u32 failures) {
-    constexpr std::array<u32, 4> waits{10, 30, 90, 240};
+    constexpr std::array<u32, 2> waits{10, 60};
     if (failures == 0 || failures > waits.size()) {
         return std::nullopt;
     }

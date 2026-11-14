@@ -485,12 +485,16 @@ bool Fsr4Upscaler::Upscale(const Inputs& in) {
     if (new_context) {
         const u32 result = CreateContext(in.render_size, in.upscale_size);
         if (result != FFX_API_RETURN_OK) {
-            // Out of video memory may pass (a scene loading is when it's shortest): FSR 3.1 draws
-            // meanwhile and FSR 4 is tried again a few times. Other errors won't pass.
+            // Out of video memory may pass (a scene loading is when it's shortest), so FSR 3.1
+            // draws meanwhile and FSR 4 is tried again. It comes as a runtime or memory error, but
+            // so do causes that won't pass: fsr4-vk returns a runtime error for every rejection
+            // (the reason is only in its fsr4.log). Hence only two tries. A dispatch failure
+            // found while the old context drained stays final.
             const bool may_pass = result == FFX_API_RETURN_ERROR_RUNTIME_ERROR ||
                                   result == FFX_API_RETURN_ERROR_MEMORY;
-            const std::optional<u32> delay =
-                may_pass ? VideoCommon::Fsr4RetryDelay(++create_failures) : std::nullopt;
+            const std::optional<u32> delay = may_pass && !failed.load()
+                                                 ? VideoCommon::Fsr4RetryDelay(++create_failures)
+                                                 : std::nullopt;
             if (delay) {
                 LOG_WARNING(Render_Vulkan, "FSR 4: trying to start it again in {} s", *delay);
                 retry_at_ns = SteadyNowNs() + s64{*delay} * 1'000'000'000;

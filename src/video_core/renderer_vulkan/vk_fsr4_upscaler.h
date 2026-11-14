@@ -69,7 +69,7 @@ public:
     bool Upscale(const Inputs& inputs);
 
     /// True while FSR 4 is out: for good, or until its next try (a context that couldn't be
-    /// created for a reason that may pass is tried again a few times, later).
+    /// created with an error that may pass is tried again twice, later).
     [[nodiscard]] bool Failed() const noexcept;
     [[nodiscard]] VkImage OutputImage() const noexcept {
         return *output_image;

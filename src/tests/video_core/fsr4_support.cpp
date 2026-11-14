@@ -140,9 +140,7 @@ TEST_CASE("FSR 4 that couldn't start is tried again a few times, then given up",
     using VideoCommon::Fsr4RetryDelay;
     CHECK_FALSE(Fsr4RetryDelay(0));
     CHECK(Fsr4RetryDelay(1) == 10u);
-    CHECK(Fsr4RetryDelay(2) == 30u);
-    CHECK(Fsr4RetryDelay(3) == 90u);
-    CHECK(Fsr4RetryDelay(4) == 240u);
-    CHECK_FALSE(Fsr4RetryDelay(5));
+    CHECK(Fsr4RetryDelay(2) == 60u);
+    CHECK_FALSE(Fsr4RetryDelay(3));
     CHECK_FALSE(Fsr4RetryDelay(100));
 }
