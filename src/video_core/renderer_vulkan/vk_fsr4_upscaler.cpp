@@ -273,13 +273,17 @@ Fsr4Upscaler::~Fsr4Upscaler() {
 }
 
 void Fsr4Upscaler::DestroyContext() {
-    if (context == nullptr) {
+    if (context == nullptr && !output_image) {
         return;
     }
-    scheduler.Finish(); // recorded dispatches may still use it
-    ffxContext ctx = context;
-    api->destroy_context(&ctx, nullptr);
-    context = nullptr;
+    scheduler.Finish(); // recorded dispatches and passes sampling the output may still use them
+    if (context != nullptr) {
+        ffxContext ctx = context;
+        api->destroy_context(&ctx, nullptr);
+        context = nullptr;
+    }
+    output_view = vk::ImageView{};
+    output_image = vk::Image{};
 }
 
 u32 Fsr4Upscaler::CreateContext(VkExtent2D render_size, VkExtent2D upscale_size) {
@@ -379,9 +383,7 @@ void Fsr4Upscaler::CreateExposure() {
 }
 
 void Fsr4Upscaler::CreateOutput(VkExtent2D upscale_size) {
-    if (output_image) {
-        scheduler.Finish(); // the old output may still be in use
-    }
+    // CreateContext's DestroyContext has freed the old output.
     output_image = memory_allocator.CreateImage(VkImageCreateInfo{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext = nullptr,
@@ -470,6 +472,7 @@ bool Fsr4Upscaler::Upscale(const Inputs& in) {
     if (!check_done && CheckOutput()) {
         LOG_ERROR(Render_Vulkan, "FSR 4 ({}) draws a black picture on {} ({}); using FSR 3.1",
                   provider_name, device.GetModelName(), device.GetDriverName());
+        DestroyContext();
         check_done = true;
         check_buffer = vk::Buffer{};
         failed = true;

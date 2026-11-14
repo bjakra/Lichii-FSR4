@@ -81,6 +81,7 @@ public:
 private:
     /// Returns the FFX return code (0 when the context was made).
     u32 CreateContext(VkExtent2D render_size, VkExtent2D upscale_size);
+    /// Destroys the context and frees the output image, once the GPU is done with them.
     void DestroyContext();
     void CreateOutput(VkExtent2D upscale_size);
     void CreateExposure();
