@@ -106,8 +106,8 @@ private:
     std::atomic<s64> retry_at_ns{};
     u32 create_failures{};
 
-    // Output check: a grid of input and output pixels read back now and then until FSR 4 has
-    // drawn a picture.
+    // Output check: a grid of input and output pixels read back now and then until each context
+    // has drawn a picture.
     vk::Buffer check_buffer;
     u64 check_tick{};
     u32 check_frame{};

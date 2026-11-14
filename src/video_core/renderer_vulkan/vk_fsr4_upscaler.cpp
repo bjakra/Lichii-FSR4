@@ -504,6 +504,13 @@ bool Fsr4Upscaler::Upscale(const Inputs& in) {
         }
         create_failures = 0;
         CreateOutput(in.upscale_size);
+        // Check the new context's output from the start. A pending check read the old one, and
+        // DestroyContext has waited for it.
+        check_pending = false;
+        check_done = false;
+        check_frame = 0;
+        good_checks = 0;
+        black_checks = 0;
     }
 
     ffxDispatchDescUpscale dispatch{};

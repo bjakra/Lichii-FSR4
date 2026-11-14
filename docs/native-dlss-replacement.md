@@ -100,10 +100,10 @@ the game keeps its own pass whenever DLSS is off, unavailable or fails to start.
   shows `Ocarina FSR 4 evaluated` while it runs. A context that fails with a runtime or memory
   error (out of video memory while a scene loads, for one) is tried again after 10 and 60 s while
   FSR 3.1 draws; fsr4-vk returns a runtime error for every rejection, so permanent causes are
-  retried too. Until FSR 4 has drawn a picture, an 8x8 grid of its input and output
-  pixels is read back every 30 frames; eight black or NaN outputs in a row over a varied input
-  hand over to FSR 3.1 for the session (both adapted from CheezyEmu, `f2f236e148` and
-  `3260bc5470`).
+  retried too. Until each context (a resize or a retry makes a new one) has drawn a picture, an
+  8x8 grid of FSR 4's input and output pixels is read back every 30 frames; eight black or NaN
+  outputs in a row over a varied input hand over to FSR 3.1 for the session and free FSR 4's
+  context and output (both adapted from CheezyEmu, `f2f236e148` and `3260bc5470`).
 - FSR 4 on Linux (RADV, off by default): "Use FSR 4 (fsr4-vk community Vulkan port) in place of
   FSR 3.1" feeds the same inputs to [fsr4-vk](https://github.com/Astyyyyy/fsr4-vk) (GPL-3.0), a
   community Vulkan port of FSR 4.1.1 built from AMD's weights and shaders. It is not AMD's
