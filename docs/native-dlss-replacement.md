@@ -129,9 +129,9 @@ the game keeps its own pass whenever DLSS is off, unavailable or fails to start.
   leaves FSR 3.1 running (with the retries and output check above), and the log names the active
   upscaler and why. fsr4-vk writes its own reasons, such as why it rejected a context, to
   `fsr4.log` in the working directory (`FSR4_VK_LOG_PATH` moves it). Ported from #915's loader,
-  with the fixes of zortos293/Lichii#1540 and #1595. Not yet tested in a game: a standalone
-  program repeating Lichii's calls created the INT8 context and upscaled a synthetic frame on an
-  RX 6800 XT with Mesa RADV.
+  with the fixes of zortos293/Lichii#1540 and #1595. Tested on one card: the INT8 network
+  ran in the game at 2560x1440 to 3840x2160 on an RX 6800 XT with Mesa 27 RADV, at about 50 fps
+  where FSR 3.1 held 60. The FP8 network is untested.
 - #644 (`82494c4820`, `74a2d20c90`, `4352c06bbf`) supplies the effects capture, used by FSR only
   (DLSS gets no bias mask and runs as before). FSR uses its R16F current/history bias as both
   reactive and transparency/composition masks; missing capture uses zero masks, not stale
