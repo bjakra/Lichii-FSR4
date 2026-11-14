@@ -659,7 +659,8 @@ VkImageUsageFlags FrameGenCopyUsage() {
 }
 
 struct OcarinaFrameSlot {
-    OcarinaFrameSlot(const Device& device, MemoryAllocator& allocator, VkExtent2D extent_)
+    OcarinaFrameSlot(const Device& device, MemoryAllocator& allocator, VkExtent2D extent_,
+                     bool fsr4)
         : extent{extent_}, motion{CreateOcarinaImage(
                               allocator, extent, MOTION_FORMAT, VK_IMAGE_USAGE_STORAGE_BIT |
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -668,7 +669,7 @@ struct OcarinaFrameSlot {
           // TRANSFER_SRC: FSR 4's output check reads a few of its pixels.
           color{CreateOcarinaImage(allocator, extent, LIVE_COLOR_FORMAT,
                                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT)},
+                                       (fsr4 ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0))},
           color_view{CreateOcarinaView(device, *color, LIVE_COLOR_FORMAT)} {}
 
     VkExtent2D extent;
@@ -951,7 +952,8 @@ bool OcarinaUpscaler::Record(VkImageView color, VkImageView depth, VkImageView t
         return false;
     }
     if (!*slot || (*slot)->extent.width != extent.width || (*slot)->extent.height != extent.height) {
-        *slot = std::make_unique<OcarinaFrameSlot>(state.device, state.allocator, extent);
+        *slot = std::make_unique<OcarinaFrameSlot>(state.device, state.allocator, extent,
+                                                   state.fsr4 != nullptr);
     }
     auto& resources = **slot;
     const VkSampler sampler = state.PointSampler();
