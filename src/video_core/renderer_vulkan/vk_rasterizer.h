@@ -333,8 +333,10 @@ private:
     u32 draw_counter = 0;
     std::optional<u64> oot_camera_sample_frame;
     mutable std::optional<VideoCommon::OcarinaUpscaleBackend> oot_backend;
-    /// The game started at the DLSS Performance render scale (1920x1080).
+    /// The game started at the 3/4 render scale (1920x1080).
     bool oot_performance_scale{};
+    /// FSR writes the game's 2560x1440 frame under Max Resolution, not a 3840x2160 image.
+    mutable bool oot_fsr_game_output{};
     struct OcarinaMotionTrace {
         const Tegra::MemoryManager* camera_channel{};
         const Tegra::MemoryManager* depth_channel{};

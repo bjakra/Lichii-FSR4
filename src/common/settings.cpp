@@ -49,6 +49,7 @@ SWITCHABLE(AntiAliasing, false);
 SWITCHABLE(OotAntiAliasing, false);
 SWITCHABLE(NvidiaDlssQuality, false);
 SWITCHABLE(NvidiaDlssPreset, false);
+SWITCHABLE(OcarinaFsrQuality, false);
 SWITCHABLE(HdrMode, false);
 SWITCHABLE(HdrSwapchain, false);
 SWITCHABLE(AspectRatio, true);
@@ -91,6 +92,7 @@ Values values;
 namespace {
 std::atomic<u32> nvidia_dlss_runtime_options{};
 std::atomic<u32> applied_ocarina_render_scale{};
+std::atomic<bool> ocarina_max_resolution_applied{};
 }
 
 void RefreshNvidiaDlssRuntimeSettings() {
@@ -100,27 +102,48 @@ void RefreshNvidiaDlssRuntimeSettings() {
         std::memory_order_relaxed);
 }
 
-std::optional<NvidiaDlssQuality> OcarinaDlssRenderScale() {
-    const auto quality = values.nvidia_dlss_quality.GetValue();
-    if (!values.nvidia_dlss.GetValue() || !IsDockedMode() ||
-        (quality != NvidiaDlssQuality::Balanced && quality != NvidiaDlssQuality::Performance &&
-         quality != NvidiaDlssQuality::UltraPerformance)) {
+std::optional<OcarinaRenderScale> OcarinaDlssRenderScale() {
+    if (!values.nvidia_dlss.GetValue() || !IsDockedMode()) {
         return std::nullopt;
     }
-    return quality;
+    switch (values.nvidia_dlss_quality.GetValue()) {
+    case NvidiaDlssQuality::Balanced:
+        return OcarinaRenderScale::Balanced;
+    case NvidiaDlssQuality::Performance:
+        return OcarinaRenderScale::ThreeQuarter;
+    case NvidiaDlssQuality::UltraPerformance:
+        return OcarinaRenderScale::Half;
+    default:
+        return std::nullopt;
+    }
 }
 
-void SetAppliedOcarinaRenderScale(std::optional<NvidiaDlssQuality> quality) {
-    applied_ocarina_render_scale.store(quality ? static_cast<u32>(*quality) + 1 : 0,
+std::optional<OcarinaRenderScale> OcarinaFsrRenderScale() {
+    if (!values.ocarina_fsr.GetValue() || !IsDockedMode()) {
+        return std::nullopt;
+    }
+    return OcarinaFsrQualityScale(values.ocarina_fsr_quality.GetValue());
+}
+
+void SetAppliedOcarinaRenderScale(std::optional<OcarinaRenderScale> scale) {
+    applied_ocarina_render_scale.store(scale ? static_cast<u32>(*scale) + 1 : 0,
                                        std::memory_order_relaxed);
 }
 
-std::optional<NvidiaDlssQuality> AppliedOcarinaRenderScale() {
+std::optional<OcarinaRenderScale> AppliedOcarinaRenderScale() {
     const u32 value = applied_ocarina_render_scale.load(std::memory_order_relaxed);
     if (value == 0) {
         return std::nullopt;
     }
-    return static_cast<NvidiaDlssQuality>(value - 1);
+    return static_cast<OcarinaRenderScale>(value - 1);
+}
+
+void SetOcarinaMaxResolutionApplied(bool applied) {
+    ocarina_max_resolution_applied.store(applied, std::memory_order_relaxed);
+}
+
+bool OcarinaMaxResolutionApplied() {
+    return ocarina_max_resolution_applied.load(std::memory_order_relaxed);
 }
 
 NvidiaDlssRuntimeSettings GetNvidiaDlssRuntimeSettings() {

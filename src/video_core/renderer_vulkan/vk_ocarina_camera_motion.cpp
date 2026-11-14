@@ -1121,9 +1121,10 @@ VideoCommon::OcarinaUpscaleBackend ResolveOcarinaUpscaler(const Device& device) 
 #ifdef EGLANTINE_STREAMLINE
     dlss_available = Streamline::IsDlssAvailable();
 #endif
-    // Balanced's scene is padded, which only DLSS takes.
+    // FSR stands in for DLSS at its smaller render sizes. At Balanced the game's own upscale runs,
+    // as before: FSR at DLSS's 2276x1280 scene is untested.
     const auto scale = Settings::AppliedOcarinaRenderScale();
-    const bool render_scaled = scale && *scale != Settings::NvidiaDlssQuality::Balanced;
+    const bool render_scaled = scale && *scale != Settings::OcarinaRenderScale::Balanced;
     const auto backend = VideoCommon::SelectOcarinaUpscaler(
         Settings::values.ocarina_fsr.GetValue(), Settings::values.nvidia_dlss.GetValue(),
         dlss_available, render_scaled, value ? value : "");
@@ -1131,6 +1132,17 @@ VideoCommon::OcarinaUpscaleBackend ResolveOcarinaUpscaler(const Device& device) 
         return VideoCommon::OcarinaUpscaleBackend::Native;
     }
     return backend;
+}
+
+bool OcarinaFsrKeepsGameOutput() {
+#ifdef EGLANTINE_STREAMLINE
+    if (Settings::values.nvidia_dlss.GetValue()) {
+        return false;
+    }
+#endif
+    return Settings::values.ocarina_fsr.GetValue() &&
+           Settings::OcarinaFsrQualityKeepsGameOutput(
+               Settings::values.ocarina_fsr_quality.GetValue());
 }
 
 } // namespace Vulkan

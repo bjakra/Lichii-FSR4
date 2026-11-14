@@ -66,6 +66,7 @@ SWITCHABLE(AntiAliasing, false);
 SWITCHABLE(OotAntiAliasing, false);
 SWITCHABLE(NvidiaDlssQuality, false);
 SWITCHABLE(NvidiaDlssPreset, false);
+SWITCHABLE(OcarinaFsrQuality, false);
 SWITCHABLE(HdrMode, false);
 SWITCHABLE(HdrSwapchain, false);
 SWITCHABLE(AspectRatio, true);
@@ -443,6 +444,10 @@ struct Values {
     SwitchableSetting<bool> ocarina_fsr{linkage, false, "ocarina_fsr", Category::Renderer};
     // AMD FSR 4 in place of FSR 3.1 where FSR replaces a game's upscaler (Windows, AMD's driver).
     SwitchableSetting<bool> amd_fsr4{linkage, false, "amd_fsr4", Category::Renderer};
+    // The render and output sizes of Ocarina of Time's FSR, docked with Max Resolution. Patched
+    // into the game when it starts.
+    SwitchableSetting<OcarinaFsrQuality> ocarina_fsr_quality{
+        linkage, OcarinaFsrQuality::Quality4K, "ocarina_fsr_quality", Category::Renderer};
     SwitchableSetting<AspectRatio, true> aspect_ratio{linkage,
                                                       AspectRatio::R16_9,
                                                       "aspect_ratio",
@@ -1136,12 +1141,67 @@ struct NvidiaDlssRuntimeSettings {
 void RefreshNvidiaDlssRuntimeSettings();
 NvidiaDlssRuntimeSettings GetNvidiaDlssRuntimeSettings();
 
-/// The NVIDIA DLSS quality whose render scale Ocarina of Time's built-in patch applies when the
-/// game starts: Balanced, Performance or Ultra Performance with NVIDIA DLSS on, docked.
-std::optional<NvidiaDlssQuality> OcarinaDlssRenderScale();
-/// The quality whose render-scale patch the running game's main module got (none: unpatched).
-void SetAppliedOcarinaRenderScale(std::optional<NvidiaDlssQuality> quality);
-std::optional<NvidiaDlssQuality> AppliedOcarinaRenderScale();
+/// The scales Ocarina of Time's built-in patch can give Max Resolution's fixed 2560x1440 render
+/// size, docked.
+enum class OcarinaRenderScale : u8 {
+    Balanced,     ///< 0.871: 2276x1280, drawn into 2288x1280 targets
+    ThreeQuarter, ///< 0.75: 1920x1080
+    TwoThirds,    ///< 0.664: 1707x960, drawn into 1712x960 targets
+    Half,         ///< 0.5: 1280x720
+};
+
+/// The scene height the game renders at that scale (none: 1440).
+constexpr u32 OcarinaRenderHeight(std::optional<OcarinaRenderScale> scale) {
+    if (!scale) {
+        return 1440;
+    }
+    switch (*scale) {
+    case OcarinaRenderScale::Balanced:
+        return 1280;
+    case OcarinaRenderScale::ThreeQuarter:
+        return 1080;
+    case OcarinaRenderScale::TwoThirds:
+        return 960;
+    case OcarinaRenderScale::Half:
+        return 720;
+    }
+    return 1440;
+}
+
+/// The render scale of an Ocarina FSR quality (none: 2560x1440).
+constexpr std::optional<OcarinaRenderScale> OcarinaFsrQualityScale(OcarinaFsrQuality quality) {
+    switch (quality) {
+    case OcarinaFsrQuality::Performance4K:
+        return OcarinaRenderScale::ThreeQuarter;
+    case OcarinaFsrQuality::UltraPerformance4K:
+    case OcarinaFsrQuality::Performance:
+        return OcarinaRenderScale::Half;
+    case OcarinaFsrQuality::Quality:
+        return OcarinaRenderScale::TwoThirds;
+    case OcarinaFsrQuality::Quality4K:
+    case OcarinaFsrQuality::Native:
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+/// Whether FSR writes the game's 2560x1440 frame at that quality rather than a 3840x2160 image.
+constexpr bool OcarinaFsrQualityKeepsGameOutput(OcarinaFsrQuality quality) {
+    return quality == OcarinaFsrQuality::Native || quality == OcarinaFsrQuality::Quality ||
+           quality == OcarinaFsrQuality::Performance;
+}
+
+/// The render scale Ocarina of Time's built-in patch applies when the game starts for the NVIDIA
+/// DLSS quality: Balanced, Performance or Ultra Performance with NVIDIA DLSS on, docked.
+std::optional<OcarinaRenderScale> OcarinaDlssRenderScale();
+/// The render scale of the Ocarina FSR quality with its FSR setting on, docked.
+std::optional<OcarinaRenderScale> OcarinaFsrRenderScale();
+/// The render scale the running game's main module got (none: unpatched).
+void SetAppliedOcarinaRenderScale(std::optional<OcarinaRenderScale> scale);
+std::optional<OcarinaRenderScale> AppliedOcarinaRenderScale();
+/// Whether the running game's main module got the Max Resolution built-in.
+void SetOcarinaMaxResolutionApplied(bool applied);
+bool OcarinaMaxResolutionApplied();
 
 constexpr u32 MIN_FRAME_GEN_MULTIPLIER = 2;
 constexpr u32 MAX_FRAME_GEN_MULTIPLIER = 4;

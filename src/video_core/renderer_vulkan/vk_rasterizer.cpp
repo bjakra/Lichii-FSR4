@@ -473,7 +473,7 @@ RasterizerVulkan::RasterizerVulkan(Core::Frontend::EmuWindow& emu_window_, Tegra
         [](void* argument) { static_cast<Scheduler*>(argument)->FlushDeferred(); },
         &scheduler);
     oot_performance_scale =
-        Settings::AppliedOcarinaRenderScale() == Settings::NvidiaDlssQuality::Performance;
+        Settings::AppliedOcarinaRenderScale() == Settings::OcarinaRenderScale::ThreeQuarter;
 }
 
 RasterizerVulkan::~RasterizerVulkan() {
@@ -3295,6 +3295,24 @@ bool RasterizerVulkan::OcarinaTemporalEnabled() const {
         Settings::values.ocarina_fsr.GetValue() && !Fsr3Upscaler::IsSupported(device)) {
         LOG_WARNING(Render_Vulkan, "Ocarina FSR 3.1 unsupported on this device; using native upscale");
     }
+    if (*oot_backend == VideoCommon::OcarinaUpscaleBackend::Fsr) {
+        oot_fsr_game_output = OcarinaFsrKeepsGameOutput();
+        const auto quality =
+            Settings::CanonicalizeEnum(Settings::values.ocarina_fsr_quality.GetValue());
+        if (Settings::OcarinaMaxResolutionApplied()) {
+            const auto scale = Settings::AppliedOcarinaRenderScale();
+            const u32 height = Settings::OcarinaRenderHeight(scale);
+            LOG_INFO(Render_Vulkan,
+                     "Ocarina FSR quality {}: the game renders {}x{}{}, FSR writes {}", quality,
+                     (height * 16 + 8) / 9, height, scale ? " (patched)" : "",
+                     oot_fsr_game_output ? "its 2560x1440 frame" : "3840x2160");
+        } else {
+            LOG_INFO(Render_Vulkan,
+                     "Ocarina FSR quality {}: Max Resolution is off, FSR takes the game's sizes "
+                     "(1080p to 1440p docked)",
+                     quality);
+        }
+    }
     return *oot_backend != VideoCommon::OcarinaUpscaleBackend::Native;
 }
 
@@ -3592,7 +3610,7 @@ bool RasterizerVulkan::TryOcarinaUpscale(const ComputePipeline& pipeline, bool r
     using VideoCore::Surface::PixelFormat;
     const auto extent = oot_motion.extent;
     const bool native_size = upscale_hash == ComputePipeline::OcarinaFullSizeShader;
-    // At the DLSS Performance render scale (1920x1080) the game upscales to 2560x1440 with its
+    // At the 3/4 render scale (1920x1080) the game upscales to 2560x1440 with its
     // 3/4 pass instead (QuincyForbes' f7d0938b5b). The scale is the one the game started with,
     // whatever quality is chosen since.
     const bool three_quarter_1440p = upscale_hash == ComputePipeline::OcarinaThreeQuarterShader &&
@@ -3601,9 +3619,14 @@ bool RasterizerVulkan::TryOcarinaUpscale(const ComputePipeline& pipeline, bool r
     const bool pass_1440p = upscale_hash == ComputePipeline::Ocarina1440pShader ||
                             upscale_hash == ComputePipeline::Ocarina1440pScaledShader ||
                             upscale_hash == ComputePipeline::Ocarina1440pScaledFieldShader ||
+                            upscale_hash == ComputePipeline::Ocarina1440pTwoThirdsShader ||
                             three_quarter_1440p;
-    const bool upscale_4k = pass_1440p && !native_resolution;
-    // The 1440p pass takes any 16:9 scene up to 2560x1440: the DLSS render scales shrink it.
+    // FSR's quality can keep the game's 2560x1440 output, as DLSS's Native does.
+    const bool keep_game_output =
+        native_resolution ||
+        (oot_backend == VideoCommon::OcarinaUpscaleBackend::Fsr && oot_fsr_game_output);
+    const bool upscale_4k = pass_1440p && !keep_game_output;
+    // The 1440p pass takes any 16:9 scene up to 2560x1440: the render scales shrink it.
     const bool valid_extents =
         pass_1440p ? extent.width <= 2560 && extent.height <= 1440 &&
                          std::abs(static_cast<int>(extent.width * 9) -

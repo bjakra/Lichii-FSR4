@@ -23,6 +23,9 @@ class StagingBufferPool;
 /// The temporal upscaler Ocarina uses this session: the settings, EDEN_NX2_DLSS_REPLACEMENT,
 /// DLSS availability, and native when FSR 3.1 is unsupported on the device.
 [[nodiscard]] VideoCommon::OcarinaUpscaleBackend ResolveOcarinaUpscaler(const Device& device);
+/// Whether Ocarina's FSR writes the game's 2560x1440 frame instead of a 3840x2160 image under Max
+/// Resolution: the FSR quality asks for it, and NVIDIA DLSS's quality didn't pick the render size.
+[[nodiscard]] bool OcarinaFsrKeepsGameOutput();
 
 struct OcarinaActorMesh {
     std::vector<u8> vertices;

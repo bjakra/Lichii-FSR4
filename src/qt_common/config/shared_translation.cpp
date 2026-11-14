@@ -214,6 +214,14 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
               "AMD when you ask. The files are AMD's, under AMD's licence. Without them, or if FSR 4 "
               "can't run, FSR 3.1 is used. Takes effect when a game starts."));
 #endif
+    INSERT(Settings, ocarina_fsr_quality, tr("Ocarina of Time FSR resolution:"),
+           tr("The size Ocarina of Time renders at and the size FSR reconstructs, docked with the "
+              "Max Resolution add-on. Rendering fewer pixels is what makes it faster.\n"
+              "The 3840x2160 modes compose the 4K image with the game's HUD; the 2560x1440 modes "
+              "write the game's own 2560x1440 frame, which suits a 1440p or smaller screen.\n"
+              "Without Max Resolution the game renders 1080p and FSR writes its 1440p frame, "
+              "whatever is chosen here; handheld is unchanged. Applies when Ocarina's upscaler is "
+              "FSR (FSR 4 or FSR 3.1). Takes effect when the game starts."));
     INSERT(Settings, nvidia_dlss, tr("Use NVIDIA DLSS in place of a game's DLSS (experimental)"),
            tr("Uses NVIDIA DLSS on GeForce RTX cards in place of a Switch 2 game's own DLSS, "
               "instead of AMD FSR 3.1.\nNeeds NVIDIA's Streamline loader, and NVIDIA DLSS unless "
@@ -568,6 +576,15 @@ std::unique_ptr<ComboboxTranslationMap> ComboboxEnumeration(QObject* parent) {
                            PAIR(NvidiaDlssQuality, Balanced, tr("Balanced")),
                            PAIR(NvidiaDlssQuality, Performance, tr("Performance")),
                            PAIR(NvidiaDlssQuality, UltraPerformance, tr("Ultra Performance"))}});
+    translations->insert(
+        {Settings::EnumMetadata<Settings::OcarinaFsrQuality>::Index(),
+         {PAIR(OcarinaFsrQuality, Quality4K, tr("Quality: 2560x1440 to 3840x2160 (default)")),
+          PAIR(OcarinaFsrQuality, Performance4K, tr("Performance: 1920x1080 to 3840x2160")),
+          PAIR(OcarinaFsrQuality, UltraPerformance4K,
+               tr("Ultra Performance: 1280x720 to 3840x2160")),
+          PAIR(OcarinaFsrQuality, Native, tr("Native AA: 2560x1440")),
+          PAIR(OcarinaFsrQuality, Quality, tr("Quality: 1707x960 to 2560x1440")),
+          PAIR(OcarinaFsrQuality, Performance, tr("Performance: 1280x720 to 2560x1440"))}});
     translations->insert(
         {Settings::EnumMetadata<Settings::NvidiaDlssPreset>::Index(),
          {PAIR(NvidiaDlssPreset, M, tr("M (DLSS 4.5, default)")),

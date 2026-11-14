@@ -72,6 +72,8 @@ public:
     /// #903).
     static constexpr u64 Ocarina1440pScaledShader = 0x4c1ae2fe58f30a97ULL;      // menus
     static constexpr u64 Ocarina1440pScaledFieldShader = 0x9302bc0d6d1d9bc1ULL; // gameplay
+    /// The 1440p upscale from the 1707x960 scene of the 2/3 render scale (gameplay).
+    static constexpr u64 Ocarina1440pTwoThirdsShader = 0x9160e500fc90ff21ULL;
     /// The game's 3/4 upscale, which it runs to 2560x1440 at the DLSS Performance render scale.
     static constexpr u64 OcarinaThreeQuarterShader = 0xe40f5efb5480e692ULL;
     /// The same output pass at 1:1, run at 1920x1080 in handheld with the Max Resolution add-on.
