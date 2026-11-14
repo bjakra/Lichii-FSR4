@@ -53,6 +53,31 @@ the game keeps its own pass whenever DLSS is off, unavailable or fails to start.
   the HUD is taken from the difference between that frame and a 1440p copy of the temporal scene,
   and composited over the 4K scene. The 4K image skips the presentation's post-processing and
   upscale filters.
+- FSR resolution (Max Resolution on, docked): "Ocarina of Time FSR resolution"
+  (`ocarina_fsr_quality`) sets the render size and FSR's output when the upscaler is FSR (FSR 4 or
+  FSR 3.1). It patches Max Resolution's fixed render scale when the game starts, with the same
+  built-in patch as the NVIDIA DLSS quality (main+0x806420; DLSS's quality takes precedence where
+  DLSS is on), and is read once per session:
+
+  | Mode | Scale | Render | FSR writes |
+  |---|---|---|---|
+  | Quality (default) | 1.0 | 2560x1440 | 3840x2160, composited as above |
+  | Performance | 0.75 | 1920x1080 | 3840x2160 |
+  | Ultra Performance | 0.5 | 1280x720 | 3840x2160 |
+  | Native AA | 1.0 | 2560x1440 | the game's 2560x1440 frame |
+  | Quality | 0.664 | 1707x960 | the game's 2560x1440 frame |
+  | Performance | 0.5 | 1280x720 | the game's 2560x1440 frame |
+
+  The game rounds the render height up to a multiple of 40, so 0.664 gives 960. It draws 1707x960
+  into 1712x960 targets (and DLSS Balanced's 2276x1280 into 2288x1280); FSR reads the scene from
+  their top left corner, and FSR 4 is given the depth image's real size. The 1440p pass from
+  1707x960 has its own shader (`9160e500fc90ff21`), from 1920x1080 it is the 3/4 pass, from
+  1280x720 `9302bc0d6d1d9bc1`. The modes writing the game's 2560x1440 frame replace the 1440p pass
+  as the Max Resolution off case does: no 4K composite, and the game finishes the frame. The log
+  says `Ocarina FSR quality <mode>: the game renders WxH (patched), FSR writes ...` once a session.
+  fsr4-vk picks its preset from the ratio each frame (native, quality, performance, and the
+  separate Ultra Performance network at 3x). Without Max Resolution the setting has no effect;
+  handheld is unchanged.
 - Max Resolution add-on on, handheld: the scene renders at 1920x1080 and the same output pass
   runs at 1:1 (`c033c3ddc9f0897b`, 1920x1080 to 1920x1080); the game's final pass then scales to
   its 2560x1440 output. FSR replaces it as native anti-aliasing (no upscale). DLSS leaves the
@@ -81,7 +106,9 @@ the game keeps its own pass whenever DLSS is off, unavailable or fails to start.
   and its motion is taken from the unjittered position. Without that offset the jitter made the
   check fail on most of the fragments it otherwise accepts.
 - Texture LOD bias (FSR only): when the session's upscaler is FSR, mipmapped samplers get
-  AMD's recommended bias log2(render / output) - 1 = -1.58 in docked mode (none in handheld).
+  AMD's recommended bias log2(render / output) - 1 in docked mode (none in handheld), from the
+  sizes the session renders and writes: -1.58 for 1440p -> 4K, -2.58 for 720p -> 4K, -1 for native
+  anti-aliasing, -1.42 for the game's 1080p -> 1440p without Max Resolution.
   Samplers pick the biased or unbiased variant at each bind, so a console mode switch takes
   effect in-session. Images the GPU wrote (render targets: bloom, blur, reflections, fog) keep
   the game's own bias.
@@ -129,9 +156,12 @@ the game keeps its own pass whenever DLSS is off, unavailable or fails to start.
   leaves FSR 3.1 running (with the retries and output check above), and the log names the active
   upscaler and why. fsr4-vk writes its own reasons, such as why it rejected a context, to
   `fsr4.log` in the working directory (`FSR4_VK_LOG_PATH` moves it). Ported from #915's loader,
-  with the fixes of zortos293/Lichii#1540 and #1595. Tested on one card: the INT8 network
-  ran in the game at 2560x1440 to 3840x2160 on an RX 6800 XT with Mesa 27 RADV, at about 50 fps
-  where FSR 3.1 held 60. The FP8 network is untested.
+  with the fixes of zortos293/Lichii#1540 and #1595. Tested on one card, an RX 6800 XT with
+  Mesa 27 RADV, docked with Max Resolution at the 60 fps limit, standing in one spot: the INT8
+  network's own GPU time is about 4.9 ms when it writes 3840x2160, whatever the render size, and
+  2.0 to 2.3 ms when it writes 2560x1440. Writing 3840x2160 the game ran at 53 (2560x1440), 56
+  (1920x1080) and 59 fps (1280x720); writing 2560x1440 it held 60 in all three modes, as did FSR
+  3.1 in every mode and the game without FSR. The FP8 network is untested.
 - #644 (`82494c4820`, `74a2d20c90`, `4352c06bbf`) supplies the effects capture, used by FSR only
   (DLSS gets no bias mask and runs as before). FSR uses its R16F current/history bias as both
   reactive and transparency/composition masks; missing capture uses zero masks, not stale

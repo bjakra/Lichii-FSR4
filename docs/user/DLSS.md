@@ -67,7 +67,8 @@ start; until then DLSS applies the new mode to the old render size. Handheld,
 DLSS off and a disabled Max Resolution add-on leave the game's scale alone. If
 DLSS turns out to be unavailable when the game starts (no NVIDIA runtime, another
 GPU), FSR 3.1 reconstructs the smaller scene instead of the game's own upscale;
-at Balanced, whose padded scene only DLSS takes, the game's own upscale runs.
+at Balanced the game's own upscale runs. With DLSS off, AMD FSR has its own
+resolution setting for Ocarina; see [Graphics](Graphics.md#ocarina-of-time-fsr-resolution).
 
 Ultra Quality is not offered merely because an SDK enum exists; this integration
 does not establish runtime support for it.

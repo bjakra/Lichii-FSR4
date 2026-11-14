@@ -58,6 +58,23 @@ Enhancements aimed at removing jagged lines/sharp edges and/or masking artifacts
 - **FXAA**: Fast Anti-Aliasing, an implementation as described on [this blog post](https://web.archive.org/web/20110831051323/http://timothylottes.blogspot.com/2011/03/nvidia-fxaa.html). Generally fast but with some innocuos artifacts.
 - **SMAA**: Subpixel Morphological Anti-Aliasing, an implementation as described on [this article](https://web.archive.org/web/20250000000000*/https://www.iryoku.com/smaa/).
 
+### Ocarina of Time FSR resolution
+
+With **Use AMD FSR 3.1 upscaling in Ocarina of Time** on (and optionally FSR 4 in its place),
+**Ocarina of Time FSR resolution** chooses how many pixels the game renders and how large an
+image FSR reconstructs. It applies docked with the game's Max Resolution add-on (Add-Ons) and
+takes effect when the game starts.
+
+- The **3840x2160** modes (Quality is the default) reconstruct a 4K image. On a smaller screen it
+  is scaled down again, so they cost time for little gain there.
+- The **2560x1440** modes write the game's own 2560x1440 frame: Native AA renders 2560x1440 and
+  uses FSR only for anti-aliasing; Quality and Performance render 1707x960 and 1280x720.
+
+On a 1440p (or smaller) screen use a 2560x1440 mode. FSR 4's cost depends mostly on the size it
+writes: on an RX 6800 XT it held 60 fps writing 2560x1440 and fell to 53 to 59 fps writing
+3840x2160. Without Max Resolution the game renders 1080p and FSR writes its 1440p frame whatever
+is chosen here. The log line `Ocarina FSR quality ...` names the mode and sizes in use.
+
 ### Filters
 
 Various graphical filters exist - each of them aimed at a specific target/image quality preset.
