@@ -3,7 +3,10 @@
 
 #pragma once
 
+#include <cmath>
 #include <string_view>
+
+#include "common/common_types.h"
 
 namespace VideoCommon {
 
@@ -27,10 +30,21 @@ constexpr OcarinaUpscaleBackend SelectOcarinaUpscaler(bool fsr_enabled, bool dls
                                         : OcarinaUpscaleBackend::Native;
 }
 
+/// The scene's height over FSR's output height, docked. With Max Resolution the game renders
+/// render_height and FSR writes 3840x2160 or, keeping the game's output, 2560x1440; without it the
+/// game's 3/4 pass takes 1080p to 1440p.
+constexpr float OcarinaFsrRenderRatio(bool max_resolution, u32 render_height,
+                                      bool keep_game_output) {
+    if (!max_resolution) {
+        return 0.75f;
+    }
+    return static_cast<float>(render_height) / (keep_game_output ? 1440.0f : 2160.0f);
+}
+
 /// Texture LOD bias added to Ocarina's mipmapped samplers while FSR upscales. AMD recommends
-/// log2(render / output) - 1: -1.58 for docked 1440p -> 4K.
-constexpr float OcarinaFsrLodBias(OcarinaUpscaleBackend backend) {
-    return backend == OcarinaUpscaleBackend::Fsr ? -1.58f : 0.0f;
+/// log2(render / output) - 1: -1.58 for 1440p -> 4K, -1 for native anti-aliasing.
+inline float OcarinaFsrLodBias(OcarinaUpscaleBackend backend, float render_ratio) {
+    return backend == OcarinaUpscaleBackend::Fsr ? std::log2(render_ratio) - 1.0f : 0.0f;
 }
 
 /// Whether a sampler with that bias keeps it for an image: only docked (handheld isn't measured),

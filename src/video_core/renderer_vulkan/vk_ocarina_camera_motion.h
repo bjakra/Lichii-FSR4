@@ -26,6 +26,8 @@ class StagingBufferPool;
 /// Whether Ocarina's FSR writes the game's 2560x1440 frame instead of a 3840x2160 image under Max
 /// Resolution: the FSR quality asks for it, and NVIDIA DLSS's quality didn't pick the render size.
 [[nodiscard]] bool OcarinaFsrKeepsGameOutput();
+/// The texture LOD bias Ocarina's samplers get for the session's upscaler and sizes.
+[[nodiscard]] f32 OcarinaFsrSessionLodBias(const Device& device);
 
 struct OcarinaActorMesh {
     std::vector<u8> vertices;

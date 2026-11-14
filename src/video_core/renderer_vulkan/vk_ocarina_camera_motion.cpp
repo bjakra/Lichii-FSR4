@@ -1145,4 +1145,12 @@ bool OcarinaFsrKeepsGameOutput() {
                Settings::values.ocarina_fsr_quality.GetValue());
 }
 
+f32 OcarinaFsrSessionLodBias(const Device& device) {
+    const f32 ratio = VideoCommon::OcarinaFsrRenderRatio(
+        Settings::OcarinaMaxResolutionApplied(),
+        Settings::OcarinaRenderHeight(Settings::AppliedOcarinaRenderScale()),
+        OcarinaFsrKeepsGameOutput());
+    return VideoCommon::OcarinaFsrLodBias(ResolveOcarinaUpscaler(device), ratio);
+}
+
 } // namespace Vulkan

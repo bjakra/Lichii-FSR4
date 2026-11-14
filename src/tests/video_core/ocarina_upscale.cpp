@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include "video_core/ocarina_upscale.h"
 #include "video_core/fsr.h"
@@ -34,9 +35,22 @@ TEST_CASE("OoT FSR texture LOD bias follows the upscaler, the console mode and f
     using enum VideoCommon::OcarinaUpscaleBackend;
     using VideoCommon::KeepOcarinaFsrLodBias;
     using VideoCommon::OcarinaFsrLodBias;
-    CHECK(OcarinaFsrLodBias(Fsr) == -1.58f);
-    CHECK(OcarinaFsrLodBias(Dlss) == 0.0f);
-    CHECK(OcarinaFsrLodBias(Native) == 0.0f);
+    using VideoCommon::OcarinaFsrRenderRatio;
+    // Max Resolution: 1440p, 1080p and 720p to 4K; 1440p, 960p and 720p to the game's 1440p.
+    CHECK(OcarinaFsrLodBias(Fsr, OcarinaFsrRenderRatio(true, 1440, false)) ==
+          Catch::Approx(-1.585f).margin(0.001f));
+    CHECK(OcarinaFsrLodBias(Fsr, OcarinaFsrRenderRatio(true, 1080, false)) == -2.0f);
+    CHECK(OcarinaFsrLodBias(Fsr, OcarinaFsrRenderRatio(true, 720, false)) ==
+          Catch::Approx(-2.585f).margin(0.001f));
+    CHECK(OcarinaFsrLodBias(Fsr, OcarinaFsrRenderRatio(true, 1440, true)) == -1.0f);
+    CHECK(OcarinaFsrLodBias(Fsr, OcarinaFsrRenderRatio(true, 960, true)) ==
+          Catch::Approx(-1.585f).margin(0.001f));
+    CHECK(OcarinaFsrLodBias(Fsr, OcarinaFsrRenderRatio(true, 720, true)) == -2.0f);
+    // Without Max Resolution the game's 3/4 pass takes 1080p to 1440p, whatever is chosen.
+    CHECK(OcarinaFsrLodBias(Fsr, OcarinaFsrRenderRatio(false, 720, true)) ==
+          Catch::Approx(-1.415f).margin(0.001f));
+    CHECK(OcarinaFsrLodBias(Dlss, 0.5f) == 0.0f);
+    CHECK(OcarinaFsrLodBias(Native, 0.5f) == 0.0f);
     CHECK(KeepOcarinaFsrLodBias(true, false, false));
     CHECK_FALSE(KeepOcarinaFsrLodBias(false, false, false));
     CHECK_FALSE(KeepOcarinaFsrLodBias(true, false, true));
