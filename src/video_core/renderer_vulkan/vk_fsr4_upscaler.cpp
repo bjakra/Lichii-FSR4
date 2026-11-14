@@ -518,9 +518,9 @@ bool Fsr4Upscaler::Upscale(const Inputs& in) {
     dispatch.header.pNext = nullptr;
     dispatch.color = Resource(in.color.image, in.color.format, in.render_size, 0,
                               FFX_API_RESOURCE_STATE_COMPUTE_READ);
-    dispatch.depth = Resource(in.depth.image, in.depth.format, in.render_size,
-                              FFX_API_RESOURCE_USAGE_DEPTHTARGET,
-                              FFX_API_RESOURCE_STATE_COMPUTE_READ);
+    dispatch.depth = Resource(
+        in.depth.image, in.depth.format, in.depth_size.width != 0 ? in.depth_size : in.render_size,
+        FFX_API_RESOURCE_USAGE_DEPTHTARGET, FFX_API_RESOURCE_STATE_COMPUTE_READ);
     dispatch.motionVectors = Resource(in.motion_vectors.image, in.motion_vectors.format,
                                       in.render_size, 0, FFX_API_RESOURCE_STATE_COMPUTE_READ);
     dispatch.exposure = Resource(*exposure_image, VK_FORMAT_R32_SFLOAT, {1, 1}, 0,

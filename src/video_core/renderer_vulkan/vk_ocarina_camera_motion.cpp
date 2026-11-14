@@ -934,7 +934,7 @@ bool OcarinaUpscaler::Record(VkImageView color, VkImageView depth, VkImageView t
                             VkExtent2D output_extent, VkExtent2D target_extent,
                             const Matrix& current, const Matrix& previous,
                             const OcarinaActorMesh& mesh, VkImage depth_image, u64 frame,
-                            std::array<f32, 2> jitter, [[maybe_unused]] VkExtent2D depth_extent) {
+                            std::array<f32, 2> jitter, VkExtent2D depth_extent) {
     auto& state = *impl;
     if (state.last_frame == frame || state.Failed()) {
         return false;
@@ -1048,6 +1048,7 @@ bool OcarinaUpscaler::Record(VkImageView color, VkImageView depth, VkImageView t
             .sharpness = sharpness,
             .vertical_fov = 2.0f * std::atan(1.0f / projection_y),
             .jitter = jitter,
+            .depth_size = depth_extent,
         });
         if (used_fsr4) {
             state.last_evaluation = now;

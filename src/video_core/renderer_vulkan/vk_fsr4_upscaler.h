@@ -51,6 +51,9 @@ public:
         f32 camera_near = 0.1f;
         f32 camera_far = 25000.0f;
         std::array<f32, 2> jitter{}; ///< Offset the scene was drawn with, in render pixels.
+        /// The depth image's size when it is larger than the render size (the scene lies in its
+        /// top left corner); zero for the render size.
+        VkExtent2D depth_size{};
     };
 
     /// Whether FSR 4 is turned on and the device can run it: AMD's driver on Windows, and on Linux

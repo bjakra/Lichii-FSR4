@@ -1331,8 +1331,7 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func, bool is_in
         if (scene_id) {
             const auto& scene = texture_cache.GetImageView(scene_id);
             if (scene.format == VideoCore::Surface::PixelFormat::B10G11R11_FLOAT &&
-                scene.size.width == oot_motion.extent.width &&
-                scene.size.height == oot_motion.extent.height && !scene.IsRescaled() &&
+                oot_motion.SceneSized(scene.size.width, scene.size.height) && !scene.IsRescaled() &&
                 scene.range == VideoCommon::SubresourceRange{}) {
                 oot_effects_scene = scene.Handle(Shader::TextureType::Color2D);
                 oot_effects_address = scene.gpu_addr;
@@ -3343,14 +3342,13 @@ void RasterizerVulkan::TrackOcarinaCamera() {
             return;
         }
         // The camera's extent is the scene's. The images are that size, or up to 15 pixels
-        // larger at the DLSS Balanced render scale, which draws 2276x1280 into 2288x1280
-        // (QuincyForbes' f7d0938b5b); only DLSS takes those.
+        // larger at the Balanced and 2/3 render scales, which draw 2276x1280 into 2288x1280
+        // (QuincyForbes' f7d0938b5b) and 1707x960 into 1712x960. The upscalers read the scene
+        // from the top left corner.
         const VkExtent2D scene{static_cast<u32>(scene_width), static_cast<u32>(scene_height)};
-        const bool padded = scene.width != color.size.width || scene.height != color.size.height;
         if (static_cast<f32>(scene.width) != scene_width ||
             static_cast<f32>(scene.height) != scene_height ||
-            color.size.width - scene.width >= 16 || color.size.height - scene.height >= 16 ||
-            (padded && oot_backend != VideoCommon::OcarinaUpscaleBackend::Dlss)) {
+            color.size.width - scene.width >= 16 || color.size.height - scene.height >= 16) {
             return;
         }
         const std::span values{camera};
@@ -3390,8 +3388,7 @@ void RasterizerVulkan::UpdateOcarinaJitter() {
         const auto& targets = texture_cache.GetRenderTargets();
         if (targets.depth_buffer_id) {
             const auto& depth = texture_cache.GetImageView(targets.depth_buffer_id);
-            if (depth.size.width == oot_motion.extent.width &&
-                depth.size.height == oot_motion.extent.height && !depth.IsRescaled()) {
+            if (oot_motion.SceneSized(depth.size.width, depth.size.height) && !depth.IsRescaled()) {
                 // Halton (2, 3) with AMD's phase count for the last FSR frame's scale.
                 const u32 index = static_cast<u32>(render_trace_frame % oot_jitter_phases) + 1;
                 want = {Halton(index, 2) - 0.5f, Halton(index, 3) - 0.5f};
